@@ -23,6 +23,7 @@ savePath = "model.pt"
 # savePath = "VGG11_modified_wandb_"
 loadPath = "VGG11_modified_wandb_16000.pt"
 
+# Configuration parameters
 wandb.config.batchSizeTraining = 64
 wandb.config.batchSizeValidation = 32
 wandb.config.learningRate = 1e-4
@@ -31,12 +32,13 @@ wandb.config.numberOfIterationsValidation = 100
 wandb.config.showEvery = 100
 wandb.config.saveEvery = 4000
 
-
 training = True
 loading = False
 wandb.config.training = training
 wandb.config.loading = loading
 
+
+# Pair tracklets paths. There two files fro training data and two for testing.
 train_aPath = generalPath + r"\DATA\PAIR\train_a.txt"
 train_bPath = generalPath + r"\DATA\PAIR\train_b.txt"
 test_aPath = generalPath + r"\DATA\PAIR\val_a.txt"
@@ -49,7 +51,6 @@ test_b = open(test_bPath, 'r')
 
 
 # THIS FUNCTION READS AND RETURNS THE DATA
-
 def load_data_train():
     # This function reads a single line in both txt files,
     # returns both images as tensors already treated and the positive o negative label
@@ -58,6 +59,7 @@ def load_data_train():
 
     correct = False
 
+    # This loop it's used to avoid problems in case the detection it's not found.
     while not correct:
         try:
             if training:
@@ -105,8 +107,9 @@ def load_data_train():
             # print(e)
             correct = False
 
+    # Preparing the data as Pytorch Tensors
     toTensorTransform = transforms.ToTensor()
-    resizeTransform = transforms.Resize((128, 64))
+    resizeTransform = transforms.Resize((128, 64))  # Images are resized to 128 x 64 pixels
 
     image_a = resizeTransform(image_a)
     image_b = resizeTransform(image_b)
@@ -117,6 +120,7 @@ def load_data_train():
     image_a = torch.unsqueeze(image_a, 0)  # Add the forth dimension for the batch size
     image_b = torch.unsqueeze(image_b, 0)
 
+    # Calculates the label by checking if the two detections correspond to the same identity
     if line_a[1] == line_b[1]:
         label = torch.ones(1)
     else:
@@ -125,8 +129,7 @@ def load_data_train():
     return image_a, image_b, label
 
 
-# FUNCTION THAT RETURN THE BATCHES
-
+# FUNCTION THAT RETURNS THE BATCHES
 def prepare_batch():
     if training:
         images_a = torch.empty([wandb.config.batchSizeTraining, 3, 128, 64])  #
@@ -155,8 +158,7 @@ def prepare_batch():
     return images_a, images_b, labels
 
 
-# DECLARATION OF THE NEURAL NETWORK
-
+# NEURAL NETWORK ARCHITECTURE DECLARATION
 class SiameseCNN(nn.Module):
     def __init__(self):
         super(SiameseCNN, self).__init__()
@@ -236,7 +238,6 @@ class SiameseCNN(nn.Module):
 
 
 # DECLARATION OF THE LOSS FUNCTION
-
 class NormalizedContrastiveLoss(nn.Module):
 
     def __init__(self, margin_positive=0.3, margin_negative=0.7):
@@ -252,10 +253,12 @@ class NormalizedContrastiveLoss(nn.Module):
         # Normalization of the distance
         normalized_distance = 2 * (1 / (1 + torch.exp(-euclidean_distance)) - 0.5)
 
+        # Contrastive Loss Function
         # # perform contrastive loss calculation with the distance
         # loss_contrastive = torch.mean((1 - label) * torch.pow(euclidean_distance, 2) +
         #                               (label) * torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2))
 
+        # Normalized Double-Margin Contrastive Loss Function
         loss = 0.5 * torch.mean(label * torch.clamp(normalized_distance - self.margin_positive, min=0.0) + (1 - label) *
                                 torch.clamp(self.margin_negative - normalized_distance, min=0.0))
 
@@ -272,7 +275,7 @@ loss_function = NormalizedContrastiveLoss()
 optimizer = optim.Adagrad(net.parameters(), lr=wandb.config.learningRate)
 
 
-# TRAIN FUNCTION
+# TRAINING LOOP
 def train(iteration=0, lossHistoryTraining=[], lossHistoryValidation=[], hardAccuracyTraining=[], hardAccuracyValidation=[],
           softAccuracyTraining=[], softAccuracyValidation=[], xAxis=[]):
     global training
@@ -297,7 +300,7 @@ def train(iteration=0, lossHistoryTraining=[], lossHistoryValidation=[], hardAcc
 
         optimizer.step()
 
-        # THE FOLLOWING IS JUST MEASUREMENT VARIABLES
+        # The following is just metrics calculations
         lossIterationHistory.append(loss.item())
         distanceIterationHistory = np.concatenate((distanceIterationHistory, normalizedDistance.detach().numpy()))
 
@@ -353,7 +356,7 @@ def train(iteration=0, lossHistoryTraining=[], lossHistoryValidation=[], hardAcc
 
             training = False
 
-            lossHistoryValidationIteration, softAccuracyValidationIteration, hardAccuracyValidationIteration = evaluate()
+            lossHistoryValidationIteration, softAccuracyValidationIteration, hardAccuracyValidationIteration = test()
 
             wandb.log({'iteration': ii,
                        'lossTraining': meanLoss,
@@ -415,8 +418,8 @@ def train(iteration=0, lossHistoryTraining=[], lossHistoryValidation=[], hardAcc
 
     return net, xAxis[-1], lossHistoryTraining, lossHistoryValidation, hardAccuracyTraining, hardAccuracyValidation, softAccuracyTraining, softAccuracyValidation, xAxis
 
-
-def evaluate():
+# TESTING LOOP
+def test():
     global training
 
     lossIterationHistory = []
@@ -466,7 +469,7 @@ def evaluate():
 
     return meanLoss, softAccuracyIteration, hardAccuracyIteration
 
-
+# ONCE THE MODEL HAS BEEN TRAINED THIS FUNCTION EXTRACTS THE FEATURES OF ALL DETECTIONS INTO TEXT FILES
 def features_extraction():
     mainFileRead = open(generalPath + r'\FEATURES\my_train_samples.txt', 'r')
     readVariable = mainFileRead.read()

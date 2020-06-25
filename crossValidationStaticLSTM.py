@@ -1,3 +1,5 @@
+# This file is used to launch many experiments, one after another
+
 import os
 
 firstNumber = 0

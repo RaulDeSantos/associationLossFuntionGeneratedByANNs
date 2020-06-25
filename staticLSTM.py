@@ -11,6 +11,8 @@ from os.path import isfile, join
 import sklearn.metrics
 import sys
 
+
+# CONFIGURATION PARAMETERS
 if len(sys.argv) > 1:
     wandb.init(name=sys.argv[1].__str__() + " perfectTracklets staticCamera", project="tfg",
                group="definitive static LSTM")
@@ -57,6 +59,7 @@ file.close()
 fullVariable = fullVariable.splitlines()
 fullVariable = np.stack([np.array(line.split('|')) for line in fullVariable], axis=0)
 
+# MAKE A TRAINING VARIABLE WITH ALL THE TRAINING DETECTIONS
 fullTrainingVariable = np.empty([1, 8])
 
 for trainingIdentity in [f.replace(".txt", "") for f in listdir(generalPath + r"\DATA\LSTMTRACKLET\staticCamera\train")
@@ -67,6 +70,7 @@ for trainingIdentity in [f.replace(".txt", "") for f in listdir(generalPath + r"
 
 fullTrainingVariable = np.delete(fullTrainingVariable, 0, axis=0)
 
+# MAKE A TESTING VARIABLE WITH ALL THE TESTING DETECTIONS
 fullTestingVariable = np.empty([1, 8])
 
 for testingIdentity in [f.replace(".txt", "") for f in listdir(generalPath + r"\DATA\LSTMTRACKLET\staticCamera\test") if
@@ -77,6 +81,7 @@ for testingIdentity in [f.replace(".txt", "") for f in listdir(generalPath + r"\
 
 fullTestingVariable = np.delete(fullTestingVariable, 0, axis=0)
 
+# MAKE A VALIDATION VARIABLE WITH ALL THE VALIDATION DETECTIONS
 fullValidationVariable = np.empty([1, 8])
 
 for validationIdentity in [f.replace(".txt", "") for f in listdir(generalPath + r"\DATA\LSTMTRACKLET\staticCamera\val")
@@ -90,6 +95,7 @@ fullValidationVariable = np.delete(fullValidationVariable, 0, axis=0)
 del fullVariable
 
 
+# READ AND PREPARE DATA
 def get_info(index: int, loadingState: int, normalize: bool = False, maximumWidth: int = 1920,
              maximumHeight: int = 1080):
     global firstPass, lastFrame
@@ -116,7 +122,7 @@ def get_info(index: int, loadingState: int, normalize: bool = False, maximumWidt
     boundingBoxWidth = float(identification[6]) / maximumWidth
     boundingBoxHeight = float(identification[7]) / maximumHeight
 
-    # Calculate the difference of frames
+    # Calculate the frame difference
     if firstPass:
         lastFrame = actualFrame
         frameDifference = 0
@@ -214,6 +220,7 @@ def get_info(index: int, loadingState: int, normalize: bool = False, maximumWidt
     return inputData, positiveOutputData, negativeOutputData
 
 
+# NEURAL NETWORK ARCHITECTURE DECLARATION
 class StaticLSTM(nn.Module):
     def __init__(self, inputSize: int, hiddenSize: int, numberOfLSTMFCLayers: int, numberOfClassifierFCLayers: int):
         super(StaticLSTM, self).__init__()
@@ -286,6 +293,7 @@ class StaticLSTM(nn.Module):
                 weight.new(1, 1, self.hiddenSize).zero_())
 
 
+# DECLARATION OF THE LOSS FUNCTION
 class NormalizedContrastiveLoss(nn.Module):
 
     def __init__(self, marginPositive: float = 0.3, marginNegative: float = 0.7):
@@ -332,6 +340,7 @@ crossEntropyLossFunction = nn.CrossEntropyLoss()
 optimizer = optim.Adagrad(net.parameters(), lr=wandb.config.learningRate)
 
 
+# TRAINING LOOP
 def train():
     global firstPass
 
@@ -504,6 +513,7 @@ def train():
         validation(epoch=epoch)
 
 
+# VALIDATION LOOP
 def validation(epoch: int):
     global firstPass
 
@@ -659,6 +669,7 @@ def validation(epoch: int):
         wandb.save(join(wandb.run.dir, wandb.config.modelSavingName))
 
 
+# TESTING LOOP
 def test():
     global firstPass
 
